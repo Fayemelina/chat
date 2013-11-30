@@ -1,46 +1,38 @@
-var fs = require('fs');
-var mongo = require('mongodb');
+/**
+ * Module dependencies.
+ */
 
-var mongoose = require('mongoose');  
+var express = require('express')
+  , routes = require('./routes')
+  , user = require('./routes/user')
+  , http = require('http')
+  , path = require('path');
 
-var connectionString = process.env.CUSTOMCONNSTR_MONGOLAB_URI
-
-mongoose.connect(connectionString);
-var express = require('express');
-var config = JSON.parse(fs.readFileSync('config.json'));
-var host = config.host;
-var port = config.port;
-var dbPort = mongo.Connection.DEFAULT_PORT;
-var db = new mongo.Db('jobbies', new mongo.Server(host, dbPort, {}));
+var TaskList = require('./routes/tasklist');
+var taskList = new TaskList(process.env.CUSTOMCONNSTR_MONGOLAB_URI);
 
 var app = express();
 
-var userCollection;
+// all environments
+app.set('port', process.env.PORT || 3000);
+app.set('views', __dirname + '/views');
+app.set('view engine', 'jade');
+app.use(express.favicon());
+app.use(express.logger('dev'));
+app.use(express.bodyParser());
+app.use(express.methodOverride());
+app.use(app.router);
+app.use(express.static(path.join(__dirname, 'public')));
 
+// development only
+if ('development' == app.get('env')) {
+  app.use(express.errorHandler());
+}
 
-app.get('/', function(req, res){
-	var content = fs.readFileSync('user.html');
+app.get('/', taskList.showTasks.bind(taskList));
+app.post('/addtask', taskList.addTask.bind(taskList));
+app.post('/completetask', taskList.completeTask.bind(taskList));
 
-	getUsers(function(users){
-		var ul = '';
-		users.forEach(function(user){
-			ul += '<li>' + user.name + ':' + user.email + '</li>';
-		});
-		content = content.toString('utf8').replace('{{USERS}}', ul);
-		res.setHeader('Content-Type', 'text/html');
-		res.send(content);
-	});
+http.createServer(app).listen(app.get('port'), function(){
+  console.log('Express server listening on port ' + app.get('port'));
 });
-
-db.open(function(error){
-	db.collection('user', function(error, collection){
-		userCollection = collection;
-	});
-});
-
-function getUsers(callback) {
-	var coll = userCollection.find().toArray();
-	callback(coll);
-};
-
-app.listen(port, host);
